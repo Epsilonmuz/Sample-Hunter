@@ -11,7 +11,11 @@ By **Epsilon Sounds** · made by Edison.
 <img src="docs/screens/4-export.png" width="190" alt="Export">
 </p>
 
-## Open it
+## iPhone app
+
+A native iPhone app lives in [`ios/`](ios/): double-click `ios/SampleHunter.xcodeproj`, choose your Apple ID as the team, plug in your iPhone and press ▶. Step by step: [ios/INSTALL-iPhone.md](ios/INSTALL-iPhone.md). It records with the iPhone microphone, plays with the silent switch on, saves through the share sheet (AirDrop the ZIP to your Mac) and buzzes on the pads. CI builds it for the simulator and for a real iPhone on every push and launches it on an iPhone simulator.
+
+## Open it in the browser
 
 **https://epsilonmuz.github.io/Sample-Hunter/** on your iPhone, in Safari. Then **Share → Add to Home Screen**: it opens full-screen like an app, records with the microphone, and works offline after the first visit. Android: Chrome → *Install app*.
 
