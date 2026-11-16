@@ -13,3 +13,11 @@ for f in ['manifest.webmanifest', 'sw.js', 'icon-180.png', 'icon-192.png', 'icon
     shutil.copy(os.path.join(src, f), os.path.join(out, f))
 open(os.path.join(out, '.nojekyll'), 'w').write('')
 print('docs/index.html', len(app), 'bytes')
+
+# the iPhone app bundles the same page (offline, no server)
+web = os.path.join(here, 'ios', 'SampleHunter', 'Web')
+os.makedirs(web, exist_ok=True)
+open(os.path.join(web, 'index.html'), 'w').write(app)
+for f in ['icon-180.png', 'icon-192.png']:
+    shutil.copy(os.path.join(src, f), os.path.join(web, f))
+print('ios/SampleHunter/Web/index.html')

@@ -112,6 +112,43 @@ await page.waitForTimeout(400);
 await page.screenshot({ path: path.join(out, '6-hunt-found.png') });
 
 check(errors.length === 0, 'no page errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+
+// --- inside the iPhone app: a stand-in for NativeBridge.swift records, saves and buzzes
+{
+  const wavB64 = fs.readFileSync(path.join(dir, 'test-knocks.wav')).toString('base64');
+  const np = await ctx.newPage();
+  const nerr = []; np.on('pageerror', e => nerr.push(e.message));
+  await np.addInitScript(b64 => {
+    window.__hunterNative = true; window.__sent = [];
+    window.webkit = { messageHandlers: { hunter: { postMessage: m => {
+      window.__sent.push({ cmd: m.cmd, name: m.name, len: m.b64 ? m.b64.length : 0, style: m.style });
+      if (m.cmd === 'record') setTimeout(() => { window.__nativeRecStarted(); window.__nativeLevel(0.3, 0.5); }, 50);
+      if (m.cmd === 'stop') setTimeout(() => window.__nativeRecorded(b64), 100);
+      if (m.cmd === 'save') window.__savedZip = m.b64;
+    } } } };
+  }, wavB64);
+  await np.goto('http://localhost:8765/');
+  await np.waitForTimeout(400);
+  check(await np.evaluate(() => window.__hunter.NATIVE), 'app: the page knows it runs inside the iPhone app');
+  await np.tap('#huntBtn'); await np.waitForTimeout(300);
+  check(await np.evaluate(() => document.getElementById('huntBtn').classList.contains('rec')), 'app: HUNT starts the native microphone');
+  await np.tap('#huntBtn');
+  await np.waitForFunction(() => window.__hunter.S.kit.atmos && /^Hunt /.test(window.__hunter.S.name), null, { timeout: 20000 });
+  check(await np.evaluate(() => window.__hunter.S.chops.length >= 6), 'app: the native recording comes back and is hunted');
+  await np.waitForTimeout(700);
+  await np.tap('nav button[data-v=beat]'); await np.waitForTimeout(200);
+  await np.tap('#pads button:nth-child(1)');
+  await np.tap('nav button[data-v=export]'); await np.tap('#saveZip');
+  await np.waitForFunction(() => !!window.__savedZip, null, { timeout: 30000 });
+  const sent = await np.evaluate(() => window.__sent);
+  check(sent.some(m => m.cmd === 'haptic' && m.style === 'heavy'), 'app: the kick pad buzzes (heavy haptic)');
+  const save = sent.find(m => m.cmd === 'save');
+  check(save && save.name.endsWith('.zip') && save.len > 100000, 'app: export goes to the iOS share sheet (' + (save ? save.name + ', ' + Math.round(save.len * 0.75 / 1024) + ' KB' : 'nothing') + ')');
+  const zipOk = await np.evaluate(() => { const b = atob(window.__savedZip); return b.charCodeAt(0) === 0x50 && b.charCodeAt(1) === 0x4b; });
+  check(zipOk, 'app: the shared file is a real ZIP');
+  check(nerr.length === 0, 'app: no page errors' + (nerr.length ? ': ' + nerr.join(' | ') : ''));
+  await np.close();
+}
 await browser.close(); server.close();
 console.log('\n' + fails + ' failure(s)');
 process.exit(fails ? 1 : 0);

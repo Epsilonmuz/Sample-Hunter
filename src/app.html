@@ -299,10 +299,27 @@ function makeKnob(cv, value, def, onChange, D = 42) {
 // ---------------------------------------------------------------- hunting: live mic where allowed, camera / files elsewhere
 const sandboxed = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
 const canMic = !sandboxed && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
-let rec = null;
-if (!canMic) $('huntStatus').innerHTML = '<b>Every sound is a sample.</b><br>Tap HUNT: your camera records a few seconds and only the sound is kept.';
+// Inside the iPhone app: the microphone, saving and haptics are native (see ios/SampleHunter/NativeBridge.swift)
+const NATIVE = !!(window.__hunterNative && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.hunter);
+const native = msg => { try { window.webkit.messageHandlers.hunter.postMessage(msg); } catch (e) {} };
+const haptic = style => { if (NATIVE) native({ cmd: 'haptic', style }); };
+let rec = null, nativeRec = false;
+if (NATIVE) {
+  window.__nativeRecStarted = () => { nativeRec = true; $('huntBtn').classList.add('rec'); $('huntBtn').firstChild.textContent = 'STOP'; radar.mode = 'rec'; chip('RECORDING', true); haptic('medium'); };
+  window.__nativeLevel = (level, seconds) => { $('huntSub').textContent = seconds.toFixed(1) + ' S'; radar.level = level; };
+  window.__nativeRecError = msg => { nativeRec = false; resetHuntBtn(); radar.mode = 'idle'; chip('READY'); toast(msg, 4000); };
+  window.__nativeRecorded = async b64 => {
+    nativeRec = false; resetHuntBtn();
+    const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    await huntFromBlob(new Blob([u8], { type: 'audio/mp4' }), 'Hunt ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  };
+  window.__nativeSaved = done => { if (done) toast('Saved'); };
+}
+function resetHuntBtn() { $('huntBtn').classList.remove('rec'); $('huntBtn').firstChild.textContent = 'HUNT'; $('huntSub').textContent = 'TAP TO RECORD'; }
+if (!canMic && !NATIVE) $('huntStatus').innerHTML = '<b>Every sound is a sample.</b><br>Tap HUNT: your camera records a few seconds and only the sound is kept.';
 $('huntBtn').addEventListener('click', async () => {
   ac();
+  if (NATIVE) { native({ cmd: nativeRec ? 'stop' : 'record' }); if (nativeRec) { busy(true, 'Listening...'); radar.mode = 'scan'; } return; }
   if (!canMic) { $('camInput').click(); return; }       // the camera app records the sound (and we keep only the sound)
   if (rec) { rec.stop(); return; }
   try {
@@ -635,7 +652,7 @@ function drawGrid() {
           if (P[row][s] !== null) { ac(); const k = S.kit[row]; playVoice(row, AC.currentTime + 0.01, row === 'keys' ? 60 + S.key + P[row][s] - k.root : P[row][s]); } }
         else if (row === 'hat') P.hat[s] = P.hat[s] === 0 ? 0.9 : P.hat[s] === 2 ? 0 : P.hat[s] < 0.7 ? 2 : 0.55;
         else P[row][s] = P[row][s] ? 0 : 1;
-        paintCell(c, row, s);
+        paintCell(c, row, s); haptic('light');
       });
       g.appendChild(c);
     }
@@ -669,7 +686,7 @@ const PADS = [['kick', 'Kick'], ['snare', 'Snare'], ['hat', 'Hat'], ['perc', 'Pe
   for (const [role, label] of PADS) {
     const b = document.createElement('button'); b.className = 'pad key'; b.textContent = label;
     b.addEventListener('pointerdown', e => {
-      e.preventDefault(); ac();
+      e.preventDefault(); ac(); haptic(role === 'kick' || role === 'bass' ? 'heavy' : role === 'snare' ? 'medium' : 'light');
       if (role === 'orig') { $('playOrig').click(); }
       else {
         const k = S.kit[role]; if (!k) return;
@@ -749,6 +766,10 @@ $('saveZip').addEventListener('click', async () => {
   busy(false);
   const blob = new Blob([res.zip], { type: 'application/zip' });
   try {
+    if (NATIVE) {
+      let s = ''; const u = res.zip; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+      native({ cmd: 'save', name: res.filename, b64: btoa(s) }); return;
+    }
     if (downloads) { await downloads.save({ filename: res.filename, data: blob }); toast('Saved: ' + res.filename); return; }
     const file = new File([blob], res.filename, { type: 'application/zip' });
     if (!sandboxed && navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: res.filename }); return; }
@@ -798,6 +819,7 @@ const radar = { mode: 'idle', blips: [], a: 0 };
   for (const k of [1, 0.78, 0.56]) { g.beginPath(); g.arc(c, c, R * k, 0, 7); g.stroke(); }
   for (let i = 0; i < 60; i++) { const a = i / 60 * Math.PI * 2, l = i % 5 ? 4 : 8; g.strokeStyle = i % 5 ? 'rgba(162,167,175,.25)' : 'rgba(185,190,198,.6)'; g.beginPath(); g.moveTo(c + Math.cos(a) * R, c + Math.sin(a) * R); g.lineTo(c + Math.cos(a) * (R - l), c + Math.sin(a) * (R - l)); g.stroke(); }
   const live = radar.mode === 'rec' || radar.mode === 'scan';
+  if (radar.mode === 'rec' && radar.level) { g.fillStyle = 'rgba(228,211,163,' + Math.min(0.35, radar.level * 1.2) + ')'; g.beginPath(); g.arc(c, c, (R - 10) * Math.min(1, 0.4 + radar.level * 2), 0, 7); g.fill(); }
   radar.a += live ? 0.05 : 0.008;
   const grad = g.createConicGradient ? g.createConicGradient(radar.a - 0.9, c, c) : null;
   if (grad) { grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.14, live ? 'rgba(228,211,163,.28)' : 'rgba(185,190,198,.10)'); grad.addColorStop(0.145, 'rgba(0,0,0,0)'); g.fillStyle = grad; g.beginPath(); g.arc(c, c, R - 9, 0, 7); g.fill(); }
@@ -811,9 +833,9 @@ const radar = { mode: 'idle', blips: [], a: 0 };
 })();
 window.addEventListener('resize', () => { if ($('v-kit').classList.contains('show')) drawWave(); });
 // installed as an app (Add to Home Screen): works offline after the first visit
-if (!sandboxed && 'serviceWorker' in navigator && location.protocol === 'https:') { try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {} }
+if (!sandboxed && !NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:') { try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {} }
 // a hook for the test bench
-window.__hunter = { S, huntFromSamples, buildZip, renderBeat, demoSound, startPlay, stopPlay, show };
+window.__hunter = { NATIVE, S, huntFromSamples, buildZip, renderBeat, demoSound, startPlay, stopPlay, show };
 </script>
 </body>
 </html>

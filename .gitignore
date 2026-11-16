@@ -1,2 +1,7 @@
 node_modules
 shots/
+build/
+build-device/
+ios-shots/
+*.xcuserstate
+xcuserdata/
