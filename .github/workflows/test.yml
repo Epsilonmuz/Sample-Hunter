@@ -61,6 +61,9 @@ jobs:
           xcrun simctl io "$DEV" screenshot ios-shots/launch.png
           # still running after 12 s = no crash on launch
           xcrun simctl spawn "$DEV" launchctl list | grep -q com.epsilonsounds.samplehunter
+          # a small copy of the screenshot in the log (readable without downloading artifacts)
+          sips -s format jpeg -s formatOptions 60 -Z 700 ios-shots/launch.png --out ios-shots/launch-small.jpg >/dev/null
+          echo "SCREENSHOT-BEGIN"; base64 -i ios-shots/launch-small.jpg | tr -d '\n'; echo; echo "SCREENSHOT-END"
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: ios-simulator, path: ios-shots }
