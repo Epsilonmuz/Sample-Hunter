@@ -32,6 +32,8 @@ jobs:
   # The iPhone app: builds the Xcode project, installs it on an iPhone simulator, launches it and takes a screenshot.
   ios:
     runs-on: macos-15
+    permissions:
+      contents: write     # publishes SampleHunter.ipa on the "latest" release
     steps:
       - uses: actions/checkout@v4
       - name: Bundle the page into the app
@@ -48,6 +50,12 @@ jobs:
           xcodebuild -project ios/SampleHunter.xcodeproj -scheme SampleHunter -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build-device \
             CODE_SIGNING_ALLOWED=NO build | tail -20
+      - name: Package SampleHunter.ipa (install with SideStore, no Xcode needed)
+        run: |
+          APP=build-device/Build/Products/Release-iphoneos/SampleHunter.app
+          test -d "$APP" || { echo "::error::no device app was built"; exit 1; }
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry SampleHunter.ipa Payload && ls -lh SampleHunter.ipa
       - name: Launch on a simulator and take a screenshot
         run: |
           DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for r,v in sorted(d.items(), reverse=True) if 'iOS' in r for x in v if x['name'].startswith('iPhone')))")
@@ -67,3 +75,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: ios-simulator, path: ios-shots }
+      - uses: actions/upload-artifact@v4
+        with: { name: SampleHunter-ipa, path: SampleHunter.ipa }
+      - name: Publish SampleHunter.ipa to the "latest" release (main only)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/publish-latest.sh "Sample Hunter" SampleHunter.ipa

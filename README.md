@@ -2,6 +2,13 @@
 
 **Every sound is a sample.** Point your phone at anything (a door, a bottle, your keys, your voice) and in a few seconds you have a drum kit, an 808 in the key of your sound, playable keys, an atmosphere pad, and a beat in the pocket you choose. Then take it all to FL Studio in one ZIP.
 
+## Install (no build needed)
+
+**iPhone, no Xcode:** open [SampleHunter.ipa](https://github.com/Epsilonmuz/Sample-Hunter/releases/latest/download/SampleHunter.ipa) on the iPhone and open it with SideStore (one-time setup as in [Finish Line](https://github.com/Epsilonmuz/Finish-Line-#install-on-iphone-without-xcode-free)). Refresh in SideStore every 7 days.
+
+**Or no install at all:** open https://epsilonmuz.github.io/Sample-Hunter/ in Safari, then Share > Add to Home Screen.
+
+
 By **Epsilon Sounds** · made by Edison.
 
 <p>
